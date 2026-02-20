@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoliticView – AI Political Intelligence Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div id="app">
+    <header class="pv-top-header">
+      <div class="pv-header-content">
+        <div class="pv-logo">
+          <span class="pv-logo-mark">PV</span>
+          <span class="pv-logo-text">PoliticView</span>
+        </div>
+        <div class="pv-header-controls">
+          <select id="pv-party-select" class="pv-select"
+            style="font-weight: 600; color: #1e40af; border-color: #93c5fd;">
+            <option value="BJP">BJP</option>
+            <option value="TVK">TVK</option>
+            <option value="DMK">DMK</option>
+            <option value="ADMK">ADMK</option>
+          </select>
+          <select id="pv-global-region" class="pv-select">
+            <option value="global">Global</option>
+            <option value="india">India</option>
+            <option value="us">United States</option>
+            <option value="eu">European Union</option>
+          </select>
+          <select id="pv-time-range" class="pv-select">
+            <option value="24h">Last 24h</option>
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+          </select>
+          <button id="pv-refresh-all" class="pv-btn-secondary">Refresh</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="pv-layout">
+      <aside class="pv-sidebar">
+        <nav class="pv-nav">
+          <a href="#section-core-intelligence" class="pv-nav-item active">Core Intelligence</a>
+          <a href="#section-influence-detection" class="pv-nav-item">Influence Detection</a>
+          <a href="#section-public-insight" class="pv-nav-item">Public Insight</a>
+          <a href="#section-strategy-intel" class="pv-nav-item">Strategy Intelligence</a>
+          <a href="#section-content-engine" class="pv-nav-item">Content Engine</a>
+          <a href="#section-simulation-prediction" class="pv-nav-item">Simulation</a>
+          <a href="#section-geo-field" class="pv-nav-item">Geo Intelligence</a>
+          <a href="#section-integration-ops" class="pv-nav-item">Integration</a>
+          <a href="#section-performance-learning" class="pv-nav-item">Performance</a>
+          <a href="#section-innovation-layer" class="pv-nav-item">Innovation</a>
+          <a href="#section-memory-history" class="pv-nav-item">Memory</a>
+          <a href="#section-chief-strategist" class="pv-nav-item">Chief Strategist</a>
+        </nav>
+      </aside>
+
+      <main class="pv-main-content">
+        <section id="pv-dashboard-overview" class="pv-dashboard-section">
+          <h2 class="pv-section-title">Dashboard Overview</h2>
+          <div class="pv-metrics-grid">
+            <div class="pv-metric-card">
+              <h3>Sentiment Pulse</h3>
+              <canvas id="pv-sentiment-pulse-chart"></canvas>
+            </div>
+            <div class="pv-metric-card">
+              <h3>Emotional Heatmap</h3>
+              <canvas id="pv-emotion-heatmap-chart"></canvas>
+            </div>
+            <div class="pv-metric-card">
+              <h3>Trend Warnings</h3>
+              <div id="pv-trend-inflections" class="pv-trend-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-core-intelligence" class="pv-feature-section">
+          <h2 class="pv-section-title">Core Intelligence</h2>
+          <div class="pv-feature-body" data-section-key="core-intelligence"></div>
+        </section>
+
+        <section id="section-influence-detection" class="pv-feature-section">
+          <h2 class="pv-section-title">Influence & Manipulation Detection</h2>
+          <div class="pv-feature-body" data-section-key="influence-detection"></div>
+        </section>
+
+        <section id="section-public-insight" class="pv-feature-section">
+          <h2 class="pv-section-title">Public Insight & POV</h2>
+          <div class="pv-feature-body" data-section-key="public-insight"></div>
+        </section>
+
+        <section id="section-strategy-intel" class="pv-feature-section">
+          <h2 class="pv-section-title">Strategy & Market Intelligence</h2>
+          <div class="pv-feature-body" data-section-key="strategy-intel"></div>
+        </section>
+
+        <section id="section-content-engine" class="pv-feature-section">
+          <h2 class="pv-section-title">Content & Messaging Engine</h2>
+          <div class="pv-feature-body" data-section-key="content-engine"></div>
+        </section>
+
+        <section id="section-simulation-prediction" class="pv-feature-section">
+          <h2 class="pv-section-title">Simulation & Prediction</h2>
+          <div class="pv-feature-body" data-section-key="simulation-prediction"></div>
+        </section>
+
+        <section id="section-geo-field" class="pv-feature-section">
+          <h2 class="pv-section-title">Geo & Field Intelligence</h2>
+          <div class="pv-feature-body" data-section-key="geo-field"></div>
+        </section>
+
+        <section id="section-integration-ops" class="pv-feature-section">
+          <h2 class="pv-section-title">Integration & Operations</h2>
+          <div class="pv-feature-body" data-section-key="integration-ops"></div>
+        </section>
+
+        <section id="section-performance-learning" class="pv-feature-section">
+          <h2 class="pv-section-title">Performance & Learning</h2>
+          <div class="pv-feature-body" data-section-key="performance-learning"></div>
+        </section>
+
+        <section id="section-innovation-layer" class="pv-feature-section">
+          <h2 class="pv-section-title">Innovation Layer</h2>
+          <div class="pv-feature-body" data-section-key="innovation-layer"></div>
+        </section>
+
+        <section id="section-memory-history" class="pv-feature-section">
+          <h2 class="pv-section-title">Memory & History Layer</h2>
+          <div class="pv-feature-body" data-section-key="memory-history"></div>
+        </section>
+
+        <section id="section-chief-strategist" class="pv-feature-section">
+          <h2 class="pv-section-title">Chief Strategist AI</h2>
+          <div class="pv-feature-body" data-section-key="chief-strategist"></div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="pv-footer">
+      <div class="pv-console">
+        <div class="pv-console-header">
+          <span>Activity Log</span>
+          <button id="pv-clear-log" class="pv-btn-small">Clear</button>
+        </div>
+        <pre id="pv-log-output" class="pv-log-output"></pre>
+      </div>
+    </footer>
+  </div>
+
+  <script src="config/apiKeys.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="js/utils/logger.js"></script>
+  <script src="js/utils/demoData.js"></script>
+  <script src="js/api/apiClient.js"></script>
+  <script src="js/api/llmClient.js"></script>
+  <script src="js/api/newsSources.js"></script>
+  <script src="js/api/socialSources.js"></script>
+  <script src="js/api/geoEconomicSources.js"></script>
+  <script src="js/features/coreIntelligence.js"></script>
+  <script src="js/features/influenceDetection.js"></script>
+  <script src="js/features/publicInsight.js"></script>
+  <script src="js/features/strategyIntel.js"></script>
+  <script src="js/features/contentEngine.js"></script>
+  <script src="js/features/simulationPrediction.js"></script>
+  <script src="js/features/geoField.js"></script>
+  <script src="js/features/integrationOps.js"></script>
+  <script src="js/features/performanceLearning.js"></script>
+  <script src="js/features/innovationLayer.js"></script>
+  <script src="js/features/memoryHistory.js"></script>
+  <script src="js/features/chiefStrategist.js"></script>
+  <script src="js/main.js"></script>
+</body>
+
+</html>
