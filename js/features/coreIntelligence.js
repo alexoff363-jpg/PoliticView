@@ -215,11 +215,13 @@
     const feedList = document.createElement('div');
     feedList.className = 'pv-feed-list';
     feedList.style.marginTop = '15px';
-    feedList.innerHTML = '<div class="pv-loader">Loading live feeds from 7 sources...</div>';
+    feedList.innerHTML = '<div class="pv-loader">Loading live feeds from 7 sources with strict party filtering...</div>';
     feedCard.parentNode.appendChild(feedList);
 
     // Fetch feeds
     const api = window.PoliticViewApiClient;
+    const processor = window.PoliticViewDataProcessor;
+    
     if (api.isDemoMode()) {
       feedList.innerHTML = '<div class="pv-section-footnote">Demo Mode: Feeds unavailable.</div>';
       return;
@@ -237,38 +239,37 @@
     ]).then(([news, reddit, mastodon, gdelt, newsdata, youtube]) => {
       feedList.innerHTML = '';
       
-      // Filter items by party relevance
-      const partyKeywords = {
-        'TVK': ['tvk', 'vijay', 'tamizhaga', 'vettri', 'kazhagam'],
-        'DMK': ['dmk', 'stalin', 'dravida', 'munnetra'],
-        'ADMK': ['admk', 'aiadmk', 'palaniswami', 'eps', 'amma'],
-        'BJP': ['bjp', 'annamalai', 'bharatiya', 'janata']
-      };
-      
-      const keywords = partyKeywords[party] || [];
-      
-      const filterByParty = (item) => {
-        if (!keywords.length) return true; // No filtering for unknown parties
-        const text = (item.title || item.content || '').toLowerCase();
-        return keywords.some(kw => text.includes(kw)) || text.includes('tamil nadu') || text.includes('tn politics');
-      };
-      
-      // Filter and combine all items
+      // All items are already filtered by backend, but we'll add relevance scores
       const allItems = [
-        ...news.filter(filterByParty).map(i => ({ ...i, type: 'News' })),
-        ...reddit.filter(filterByParty).map(i => ({ ...i, type: 'Reddit' })),
-        ...mastodon.filter(filterByParty).map(i => ({ ...i, type: 'Mastodon' })),
-        ...gdelt.filter(filterByParty).map(i => ({ ...i, type: 'GDELT' })),
-        ...newsdata.filter(filterByParty).map(i => ({ ...i, type: 'NewsData' })),
-        ...youtube.filter(filterByParty).map(i => ({ ...i, type: 'YouTube' }))
-      ].sort((a, b) => new Date(b.pubDate || b.publishedAt || 0) - new Date(a.pubDate || a.publishedAt || 0));
+        ...news.map(i => ({ ...i, type: 'NewsAPI', color: 'blue' })),
+        ...reddit.map(i => ({ ...i, type: 'Reddit', color: 'orange' })),
+        ...mastodon.map(i => ({ ...i, type: 'Mastodon', color: 'purple' })),
+        ...gdelt.map(i => ({ ...i, type: 'GDELT', color: 'green' })),
+        ...newsdata.map(i => ({ ...i, type: 'NewsData', color: 'blue' })),
+        ...youtube.map(i => ({ ...i, type: 'YouTube', color: 'red' }))
+      ];
 
-      if (allItems.length === 0) {
+      // Calculate relevance scores for frontend display
+      const scoredItems = allItems.map(item => ({
+        ...item,
+        relevanceScore: processor ? processor.calculateRelevanceScore(item, party) : 100
+      })).sort((a, b) => {
+        // Sort by relevance score, then by date
+        if (b.relevanceScore !== a.relevanceScore) {
+          return b.relevanceScore - a.relevanceScore;
+        }
+        return new Date(b.pubDate || b.publishedAt || 0) - new Date(a.pubDate || a.publishedAt || 0);
+      });
+
+      if (scoredItems.length === 0) {
+        const keywords = processor && processor.PARTY_KEYWORDS[party] 
+          ? processor.PARTY_KEYWORDS[party].primary.join(', ')
+          : party;
         feedList.innerHTML = `
           <div style="padding: 16px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 6px;">
             <div style="font-weight: 600; margin-bottom: 4px;">⚠️ No ${party}-specific English news found</div>
             <div style="font-size: 12px; color: #92400e;">
-              Try switching parties or check back later. Searching for: ${keywords.join(', ')}
+              Backend filtered all items. Required keywords: ${keywords}
             </div>
           </div>
         `;
@@ -279,28 +280,25 @@
       ul.style.listStyle = 'none';
       ul.style.padding = '0';
 
-      allItems.slice(0, 20).forEach(item => {
+      scoredItems.slice(0, 20).forEach(item => {
         const li = document.createElement('li');
         li.style.marginBottom = '12px';
         li.style.borderBottom = '1px solid #eee';
         li.style.paddingBottom = '8px';
 
         const date = new Date(item.pubDate || item.publishedAt || Date.now()).toLocaleDateString();
-        const sourceColors = {
-          'News': 'blue',
-          'Reddit': 'orange',
-          'Mastodon': 'purple',
-          'GDELT': 'green',
-          'NewsData': 'blue',
-          'YouTube': 'red'
-        };
-        const sourceClass = sourceColors[item.type] || 'blue';
+        const relevanceColor = item.relevanceScore >= 80 ? '#10b981' : 
+                               item.relevanceScore >= 60 ? '#3b82f6' : 
+                               item.relevanceScore >= 40 ? '#f59e0b' : '#64748b';
 
         li.innerHTML = `
           <div style="font-size: 11px; color: #888; display:flex; justify-content:space-between; align-items: center;">
-            <span style="display: flex; align-items: center;">
-              <span class="pv-badge-dot ${sourceClass}" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px;"></span> 
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <span class="pv-badge-dot ${item.color}" style="display: inline-block; width: 6px; height: 6px; border-radius: 50%;"></span> 
               ${item.type} | ${item.source || item.author || 'Unknown'}
+              <span style="background: ${relevanceColor}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600;">
+                ${item.relevanceScore}% match
+              </span>
             </span>
             <span>${date}</span>
           </div>
@@ -313,18 +311,51 @@
       
       feedList.appendChild(ul);
       
-      // Add filter info
+      // Add comprehensive filter info
       const filterInfo = document.createElement('div');
       filterInfo.style.marginTop = '12px';
+      filterInfo.style.padding = '12px';
+      filterInfo.style.background = '#f8fafc';
+      filterInfo.style.borderRadius = '6px';
       filterInfo.style.fontSize = '11px';
       filterInfo.style.color = '#64748b';
-      filterInfo.style.fontStyle = 'italic';
-      const totalSources = news.length + reddit.length + mastodon.length + gdelt.length + newsdata.length + youtube.length;
+      
+      const avgScore = scoredItems.reduce((sum, item) => sum + item.relevanceScore, 0) / scoredItems.length;
+      const highRelevance = scoredItems.filter(i => i.relevanceScore >= 80).length;
+      
+      const keywords = processor && processor.PARTY_KEYWORDS[party] 
+        ? processor.PARTY_KEYWORDS[party].primary.join(', ')
+        : party;
+      
       filterInfo.innerHTML = `
-        Showing ${allItems.length} ${party}-filtered English items from ${totalSources} total sources<br>
-        <span style="font-size: 10px;">Sources: NewsAPI (${news.length}), Reddit (${reddit.length}), Mastodon (${mastodon.length}), GDELT (${gdelt.length}), NewsData (${newsdata.length}), YouTube (${youtube.length})</span>
+        <div style="font-weight: 600; margin-bottom: 8px; color: #1e293b;">📊 Data Quality Metrics</div>
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 8px;">
+          <div><strong>Displayed:</strong> ${scoredItems.length} items</div>
+          <div><strong>Avg Relevance:</strong> ${avgScore.toFixed(0)}%</div>
+          <div><strong>High Match (80%+):</strong> ${highRelevance} items</div>
+          <div><strong>Party:</strong> ${party}</div>
+        </div>
+        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+          <strong>Source Distribution:</strong> NewsAPI (${news.length}), Reddit (${reddit.length}), Mastodon (${mastodon.length}), 
+          GDELT (${gdelt.length}), NewsData (${newsdata.length}), YouTube (${youtube.length})
+        </div>
+        <div style="margin-top: 8px; font-style: italic; color: #94a3b8;">
+          ✓ Backend filtered by keywords: ${keywords}<br>
+          ✓ English-only content (70% threshold)<br>
+          ✓ Sorted by relevance score (highest first)
+        </div>
       `;
       feedList.appendChild(filterInfo);
+      
+      logger.info("Live feed loaded", { 
+        party, 
+        items: scoredItems.length, 
+        avgRelevance: avgScore.toFixed(0),
+        highMatch: highRelevance
+      });
+    }).catch(err => {
+      feedList.innerHTML = `<div class="pv-section-footnote error">Failed to load feeds: ${err.message}</div>`;
+      logger.error("Feed loading failed", { error: err.message });
     });
   }
 

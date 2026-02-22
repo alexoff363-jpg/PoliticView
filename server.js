@@ -101,16 +101,135 @@ app.post("/api/llm/generate", async (req, res) => {
 // Backwards-compatible strategist-specific endpoint
 // Expected body: { prompt: string, model?: string }
 // --- Real Data Feed Endpoints ---
-// Helper to get search term from party
+// ============================================
+// PROFESSIONAL DATA PROCESSING UTILITIES
+// ============================================
+
+// Party-specific keyword configuration for strict filtering
+const PARTY_KEYWORDS = {
+  'TVK': {
+    primary: ['tvk', 'vijay', 'tamizhaga vettri kazhagam'],
+    secondary: ['thalapathy', 'actor vijay', 'vettri kazhagam'],
+    leaders: ['vijay'],
+    searchTerms: 'Tamizhaga Vettri Kazhagam Vijay TVK'
+  },
+  'DMK': {
+    primary: ['dmk', 'dravida munnetra kazhagam', 'stalin'],
+    secondary: ['mk stalin', 'chief minister', 'cm stalin'],
+    leaders: ['stalin', 'mk stalin', 'udhayanidhi'],
+    searchTerms: 'DMK Stalin Tamil Nadu'
+  },
+  'ADMK': {
+    primary: ['admk', 'aiadmk', 'all india anna dravida munnetra kazhagam'],
+    secondary: ['palaniswami', 'eps', 'edappadi', 'amma'],
+    leaders: ['palaniswami', 'eps', 'edappadi', 'jayalalithaa'],
+    searchTerms: 'AIADMK ADMK Palaniswami EPS'
+  },
+  'BJP': {
+    primary: ['bjp', 'bharatiya janata party', 'annamalai'],
+    secondary: ['k annamalai', 'saffron', 'hindutva'],
+    leaders: ['annamalai', 'modi', 'narendra modi'],
+    searchTerms: 'BJP Annamalai Tamil Nadu'
+  }
+};
+
+/**
+ * Get search term optimized for party
+ */
 function getSearchTerm(party) {
-  if (!party) return "Tamil Nadu Politics";
-  const map = {
-    "TVK": "Tamizhaga Vettri Kazhagam Vijay",
-    "DMK": "DMK Tamil Nadu",
-    "ADMK": "AIADMK",
-    "BJP": "BJP Tamil Nadu"
-  };
-  return map[party] || party + " Tamil Nadu";
+  if (!party || party === 'Global') return "Tamil Nadu Politics";
+  const config = PARTY_KEYWORDS[party];
+  return config ? config.searchTerms : party + " Tamil Nadu";
+}
+
+/**
+ * Check if text contains party-specific keywords (STRICT)
+ * Returns true only if primary or leader keywords are found
+ */
+function containsPartyKeywords(text, party) {
+  if (!text || !party || party === 'Global') return true;
+  
+  const config = PARTY_KEYWORDS[party];
+  if (!config) return true;
+
+  const lowerText = text.toLowerCase();
+  
+  // Must contain at least one primary keyword OR leader name
+  const hasPrimary = config.primary.some(kw => lowerText.includes(kw));
+  const hasLeader = config.leaders.some(kw => lowerText.includes(kw));
+  
+  return hasPrimary || hasLeader;
+}
+
+/**
+ * Calculate relevance score (0-100) for filtering
+ */
+function calculateRelevanceScore(item, party) {
+  if (!item || party === 'Global') return 100;
+
+  const config = PARTY_KEYWORDS[party];
+  if (!config) return 50;
+
+  const text = [
+    item.title || '',
+    item.description || '',
+    item.content || ''
+  ].join(' ').toLowerCase();
+
+  let score = 0;
+
+  // Primary keyword: +50 points
+  config.primary.forEach(kw => {
+    if (text.includes(kw)) score += 50;
+  });
+
+  // Leader name: +40 points
+  config.leaders.forEach(kw => {
+    if (text.includes(kw)) score += 40;
+  });
+
+  // Secondary keyword: +20 points
+  config.secondary.forEach(kw => {
+    if (text.includes(kw)) score += 20;
+  });
+
+  // Tamil Nadu context: +10 points
+  if (text.includes('tamil nadu') || text.includes('chennai')) {
+    score += 10;
+  }
+
+  return Math.min(100, score);
+}
+
+/**
+ * Filter and sort items by party relevance
+ * Removes items that don't contain party keywords
+ */
+function filterByPartyRelevance(items, party, minScore = 40) {
+  if (!items || !Array.isArray(items)) return [];
+  if (party === 'Global') return items;
+
+  return items
+    .filter(item => {
+      const text = (item.title || '') + ' ' + (item.description || '') + ' ' + (item.content || '');
+      return containsPartyKeywords(text, party);
+    })
+    .map(item => ({
+      ...item,
+      relevanceScore: calculateRelevanceScore(item, party)
+    }))
+    .filter(item => item.relevanceScore >= minScore)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore);
+}
+
+/**
+ * Validate English content (70% threshold)
+ */
+function isEnglish(text, threshold = 0.7) {
+  if (!text) return false;
+  const englishChars = text.match(/[a-zA-Z\s]/g);
+  if (!englishChars) return false;
+  return englishChars.length / text.length >= threshold;
 }
 
 // 1. Reddit Feed
@@ -194,21 +313,22 @@ app.get("/api/feeds/mastodon", async (req, res) => {
   }
 });
 
-// 4. NewsAPI (English only)
+// 4. NewsAPI (English only with STRICT party filtering)
 app.get("/api/feeds/newsapi", async (req, res) => {
   try {
-    const party = req.query.party;
+    const party = req.query.party || 'Global';
     const query = getSearchTerm(party);
-    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&apiKey=${CONFIG.newsApi}&sortBy=publishedAt&pageSize=20`;
+    const url = `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&apiKey=${CONFIG.newsApi}&sortBy=publishedAt&pageSize=50`;
     const response = await axios.get(url);
 
-    const articles = response.data.articles
+    let articles = response.data.articles
       .filter(a => {
-        // Additional English filtering
-        const text = (a.title + ' ' + (a.description || '')).toLowerCase();
-        // Check if text contains mostly English characters
-        const englishChars = text.match(/[a-z\s]/gi);
-        return englishChars && englishChars.length > text.length * 0.7;
+        // English validation
+        const text = (a.title + ' ' + (a.description || ''));
+        if (!isEnglish(text, 0.7)) return false;
+        
+        // STRICT: Must contain party keywords
+        return containsPartyKeywords(text, party);
       })
       .map(a => ({
         title: a.title,
@@ -217,37 +337,48 @@ app.get("/api/feeds/newsapi", async (req, res) => {
         publishedAt: a.publishedAt,
         description: a.description
       }));
-    res.json(articles);
+
+    // Apply relevance filtering and sorting
+    articles = filterByPartyRelevance(articles, party, 40);
+    
+    console.log(`NewsAPI: ${articles.length} ${party}-relevant articles from ${response.data.articles.length} total`);
+    res.json(articles.slice(0, 20));
   } catch (err) {
     console.error("NewsAPI Error:", err.message);
     res.status(500).json({ error: "Failed to fetch NewsAPI" });
   }
 });
 
-// 5. GDELT (English only)
+// 5. GDELT (English only with STRICT party filtering)
 app.get("/api/feeds/gdelt", async (req, res) => {
   try {
-    const party = req.query.party;
+    const party = req.query.party || 'Global';
     const query = party && party !== 'Global' ? `${party} sourcecountry:IN sourcelang:eng` : "politics sourcecountry:IN sourcelang:eng";
-    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query)}&mode=artlist&format=json&maxrecords=20`;
+    const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query)}&mode=artlist&format=json&maxrecords=50`;
     const response = await axios.get(url);
 
     if (response.data && response.data.articles) {
-      const articles = response.data.articles
+      let articles = response.data.articles
         .filter(a => {
-          // Filter English only
-          const text = (a.title || '').toLowerCase();
-          const englishChars = text.match(/[a-z\s]/gi);
-          return englishChars && englishChars.length > text.length * 0.7;
+          // English validation
+          const text = a.title || '';
+          if (!isEnglish(text, 0.7)) return false;
+          
+          // STRICT: Must contain party keywords
+          return containsPartyKeywords(text, party);
         })
-        .slice(0, 15)
         .map(a => ({
           title: a.title,
           source: a.domain,
           url: a.url,
           seendate: a.seendate
         }));
-      res.json(articles);
+
+      // Apply relevance filtering and sorting
+      articles = filterByPartyRelevance(articles, party, 40);
+      
+      console.log(`GDELT: ${articles.length} ${party}-relevant articles from ${response.data.articles.length} total`);
+      res.json(articles.slice(0, 15));
     } else {
       res.json([]);
     }
@@ -257,27 +388,28 @@ app.get("/api/feeds/gdelt", async (req, res) => {
   }
 });
 
-// 6. NewsData.io (English only)
+// 6. NewsData.io (English only with STRICT party filtering)
 app.get("/api/feeds/newsdata", async (req, res) => {
   try {
     if (!CONFIG.newsdataIo) {
       return res.json([]);
     }
     
-    const party = req.query.party;
+    const party = req.query.party || 'Global';
     const query = getSearchTerm(party);
     const url = `https://newsdata.io/api/1/news?apikey=${CONFIG.newsdataIo}&q=${encodeURIComponent(query)}&language=en&country=in`;
     const response = await axios.get(url);
 
     if (response.data && response.data.results) {
-      const articles = response.data.results
+      let articles = response.data.results
         .filter(a => {
-          // Additional English filtering
-          const text = (a.title + ' ' + (a.description || '')).toLowerCase();
-          const englishChars = text.match(/[a-z\s]/gi);
-          return englishChars && englishChars.length > text.length * 0.7;
+          // English validation
+          const text = (a.title + ' ' + (a.description || ''));
+          if (!isEnglish(text, 0.7)) return false;
+          
+          // STRICT: Must contain party keywords
+          return containsPartyKeywords(text, party);
         })
-        .slice(0, 15)
         .map(a => ({
           title: a.title,
           source: a.source_id,
@@ -285,7 +417,12 @@ app.get("/api/feeds/newsdata", async (req, res) => {
           publishedAt: a.pubDate,
           description: a.description
         }));
-      res.json(articles);
+
+      // Apply relevance filtering and sorting
+      articles = filterByPartyRelevance(articles, party, 40);
+      
+      console.log(`NewsData.io: ${articles.length} ${party}-relevant articles from ${response.data.results.length} total`);
+      res.json(articles.slice(0, 15));
     } else {
       res.json([]);
     }
@@ -295,25 +432,27 @@ app.get("/api/feeds/newsdata", async (req, res) => {
   }
 });
 
-// 7. YouTube (English only)
+// 7. YouTube (English only with STRICT party filtering)
 app.get("/api/feeds/youtube", async (req, res) => {
   try {
     if (!CONFIG.youtubeApiKey) {
       return res.json([]);
     }
     
-    const party = req.query.party;
+    const party = req.query.party || 'Global';
     const query = getSearchTerm(party);
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&relevanceLanguage=en&regionCode=IN&maxResults=10&key=${CONFIG.youtubeApiKey}`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&relevanceLanguage=en&regionCode=IN&maxResults=20&key=${CONFIG.youtubeApiKey}`;
     const response = await axios.get(url);
 
     if (response.data && response.data.items) {
-      const videos = response.data.items
+      let videos = response.data.items
         .filter(item => {
-          // Filter English only
-          const text = (item.snippet.title + ' ' + item.snippet.description).toLowerCase();
-          const englishChars = text.match(/[a-z\s]/gi);
-          return englishChars && englishChars.length > text.length * 0.7;
+          // English validation
+          const text = item.snippet.title + ' ' + item.snippet.description;
+          if (!isEnglish(text, 0.7)) return false;
+          
+          // STRICT: Must contain party keywords
+          return containsPartyKeywords(text, party);
         })
         .map(item => ({
           title: item.snippet.title,
@@ -323,7 +462,12 @@ app.get("/api/feeds/youtube", async (req, res) => {
           description: item.snippet.description,
           thumbnail: item.snippet.thumbnails.default.url
         }));
-      res.json(videos);
+
+      // Apply relevance filtering and sorting
+      videos = filterByPartyRelevance(videos, party, 40);
+      
+      console.log(`YouTube: ${videos.length} ${party}-relevant videos from ${response.data.items.length} total`);
+      res.json(videos.slice(0, 10));
     } else {
       res.json([]);
     }
